@@ -2,11 +2,14 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 from numpy.typing import NDArray
 
+
 def _runs(mask: NDArray[np.bool_], min_run: int) -> list[tuple[int, int]]:
     d = np.diff(np.concatenate([[0], mask.astype(np.int8), [0]]))
     return [(s, e) for s, e in zip(np.where(d == 1)[0], np.where(d == -1)[0]) if e - s >= min_run]
 
-def declip(x: NDArray[np.float32], trigger_frac: float = 5e-4, min_run: int = 3, max_run: int = 40, ctx: int = 8, overshoot: float = 1.3, max_frac: float = 0.05) -> tuple[NDArray[np.float32], int, float]:
+
+def declip(x: NDArray[np.float32], trigger_frac: float = 5e-4, min_run: int = 3, max_run: int = 40,
+           ctx: int = 8, overshoot: float = 1.3, max_frac: float = 0.05) -> tuple[NDArray[np.float32], int, float]:
     found = []
 
     for sign in (1.0, -1.0):
