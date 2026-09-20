@@ -23,31 +23,34 @@ EPS = 1e-12
 
 @dataclass
 class PreprocessConfig:
-    target_sr: int = 48000             # sampling rate
-    declip: bool = True
-    declip_trigger_frac: float = 5e-4  # only act if >=0.05% of samples sit in flat clipped runs
-    declip_min_run: int = 3
-    declip_max_run: int = 40           # longer runs are not reliably recoverable: left alone
-    declip_max_frac: float = 0.05      # >5% clipped: local repair makes it worse, so it is skipped
-    dc_remove: bool = True
-    highpass: bool = True
-    hp_cutoff_hz: float = 60.0
-    hp_order: int = 4
-    normalize: bool = True
-    target_dbfs: float = -25.0         # RMS level of the model input
-    max_gain_db: float = 30.0
-    min_input_dbfs: float = -80.0      # quieter than this = digital silence, no gain applied
-    peak_limit: float = 0.98           # gain is reduced so the output never exceeds this
+    target_sr: int = 48000 # sampling rate
+    declip: bool = True # enable declipping
+    declip_trigger_frac: float = 5e-4  # clipping threshold 
+    declip_min_run: int = 3 # minimum size of run
+    declip_max_run: int = 30   # max run size
+    declip_max_frac: float = 0.05  # >5% clipped: local repair makes it worse, so it is skipped
+    dc_remove: bool = True # dc remove
+    highpass: bool = True # high pass filter for attenuation
+    hp_cutoff_hz: float = 60.0 # cuff of hpf
+    hp_order: int = 4 # order of hfp
+    normalize: bool = True # normalization
+    target_dbfs: float = -25.0  # RMS level of the model input
+    max_gain_db: float = 30.0 # maximum allowed gain
+    min_input_dbfs: float = -80.0  # quieter than this = digital silence, no gain applied
+    peak_limit: float = 0.98 # peak safety
 
 
 class Preprocessor:
     def __init__(self, cfg: PreprocessConfig | None = None):
         self.cfg = cfg or PreprocessConfig()
+    """
+    Although currently -inf and +inf are converted to infinitely small number and big number, it could add noise, we could just replace it with 0
 
+    """
     def process(self, x, sr):
         """x: 1-D or (n, ch) array. Returns (float32 mono @ target_sr, target_sr, meta)."""
         c = self.cfg
-        x = np.nan_to_num(np.asarray(x, np.float32))
+        x = np.nan_to_num(np.asarray(x, np.float32)) # NaN = 0 and -inf and +inf. 
         if x.ndim == 2:
             x = x.mean(axis=1)
 
@@ -85,12 +88,10 @@ class Preprocessor:
 
 
 def undo_gain(y, meta):
-    """Optional: put the model output back at the original level."""
     return (np.asarray(y, np.float32) / meta["gain"]).astype(np.float32)
 
 
 def preprocess(input_path, output_path=None, cfg: PreprocessConfig | None = None):
-    """Load a file, run the pipeline, optionally save. Returns (audio, sr, meta)."""
     x, sr = load_audio(input_path)
     y, sr_out, meta = Preprocessor(cfg).process(x, sr)
 
