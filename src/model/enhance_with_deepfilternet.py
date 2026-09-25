@@ -7,7 +7,9 @@ Runs DeepFilterNet3 over every mp3 file in a folder and writes enhanced
 Usage:
     python enhance_with_deepfilternet.py \
         --noisy_dir ./noisy \
-        --output_dir ./enhanced
+        --output_dir ./enhanced \
+        --pad \
+        --atten_lim_db 20
 
 Notes:
 - DeepFilterNet3 internally operates at 48 kHz mono. Input audio is
@@ -17,6 +19,20 @@ Notes:
   -> "file01.wav".
 - mp3 decoding uses librosa (via audioread/ffmpeg), so ffmpeg must be
   installed and on PATH (see install commands in README).
+- --pad (default on) tells DeepFilterNet3 to compensate for its own
+  known, fixed algorithmic delay internally, via the `pad` argument of
+  df.enhance.enhance(). Previously this pipeline only handled delay by
+  cross-correlating enhanced output against the clean reference in
+  postprocess_enhanced.py -- that still runs and still helps (it also
+  removes small per-file drift), but it's now on top of the model
+  already compensating for its own inherent delay, rather than trying
+  to blind-fit the whole thing from a reference signal alone.
+- --atten_lim_db limits how aggressively DeepFilterNet3 suppresses
+  noise (in dB). Left at the model's default (no limit) if unset. If
+  you're trying to raise PESQ specifically, over-suppression is a
+  common cause of "musical noise" artifacts that hurt perceptual
+  quality without necessarily showing up in raw SNR -- try sweeping
+  this (e.g. 12-24 dB) rather than pushing postprocessing further.
 """
 
 import argparse
@@ -30,7 +46,8 @@ from tqdm import tqdm
 from df.enhance import enhance, init_df
 
 
-def process_file(model, df_state, in_path: Path, out_path: Path) -> None:
+def process_file(model, df_state, in_path: Path, out_path: Path,
+                  pad: bool, atten_lim_db) -> None:
     sr_model = df_state.sr()
 
     # Load and resample to the model's expected sample rate, mono.
@@ -39,7 +56,7 @@ def process_file(model, df_state, in_path: Path, out_path: Path) -> None:
     # DeepFilterNet expects a torch tensor shaped (channels, samples).
     audio_t = torch.from_numpy(audio).unsqueeze(0).float()
 
-    enhanced_t = enhance(model, df_state, audio_t)
+    enhanced_t = enhance(model, df_state, audio_t, pad=pad, atten_lim_db=atten_lim_db)
     enhanced_np = enhanced_t.squeeze(0).cpu().numpy()
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,6 +71,27 @@ def main():
         "--pattern",
         default="*.mp3",
         help="Glob pattern for input files inside noisy_dir (default: *.mp3)",
+    )
+    parser.add_argument(
+        "--pad",
+        dest="pad",
+        action="store_true",
+        default=True,
+        help="Use DeepFilterNet3's built-in algorithmic delay compensation (default: on)",
+    )
+    parser.add_argument(
+        "--no_pad",
+        dest="pad",
+        action="store_false",
+        help="Disable built-in delay compensation",
+    )
+    parser.add_argument(
+        "--atten_lim_db",
+        type=float,
+        default=None,
+        help="Limit noise attenuation to this many dB (e.g. 12-24). "
+             "Unset = model default (no limit). Lower values are less "
+             "aggressive and can reduce musical-noise artifacts that hurt PESQ.",
     )
     args = parser.parse_args()
 
@@ -77,7 +115,7 @@ def main():
     for f in tqdm(files, desc="Enhancing"):
         out_path = output_dir / (f.stem + ".wav")
         try:
-            process_file(model, df_state, f, out_path)
+            process_file(model, df_state, f, out_path, pad=args.pad, atten_lim_db=args.atten_lim_db)
         except Exception as e:
             failures.append((f.name, str(e)))
             print(f"[FAILED] {f.name}: {e}")

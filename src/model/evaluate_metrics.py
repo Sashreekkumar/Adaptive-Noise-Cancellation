@@ -1,7 +1,7 @@
 """
 evaluate_metrics.py
 
-Computes SNR, PESQ, and STOI between clean reference files and
+Computes SNR, SI-SDR, PESQ, and STOI between clean reference files and
 DeepFilterNet3-enhanced files (matched by filename stem). Optionally
 also scores the original noisy files against clean, as a baseline, so
 you can see the improvement DeepFilterNet3 provides.
@@ -23,9 +23,25 @@ Assumptions:
 - SNR is a simple time-domain global SNR: 10*log10(sum(clean^2) /
   sum((clean-estimate)^2)) after trimming to equal length. This
   assumes clean and enhanced/noisy signals are time-aligned (which
-  they should be, since DeepFilterNet3 and mp3 decoding do not
-  introduce significant delay/drift). For stricter alignment you can
-  cross-correlate first; see align_signals() below (off by default).
+  they should be if you ran postprocess_enhanced.py first, since that
+  script already delay-aligns and gain-matches against the clean
+  reference). For unaligned input, use --align (see below).
+- SI-SDR is also reported (align_utils.si_sdr): this is the formal,
+  standard name for what "gain-matched SNR" actually is. If your
+  enhanced files already went through postprocess_enhanced.py's
+  gain-matching step, snr_* and si_sdr_* will track each other closely
+  by construction -- si_sdr_* is here so that's explicit rather than
+  implicit. Report whichever your benchmark expects, but know what
+  each one represents.
+- --align now uses the same GCC-PHAT delay estimator as
+  postprocess_enhanced.py (see align_utils.py). Previously this script
+  had its own separate, plain-cross-correlation implementation, which
+  could pick a different (often pitch-period-aliased) lag than
+  postprocessing's estimator -- that mismatch was the likely cause of
+  --align appearing to *undo* postprocessing's alignment rather than
+  being a no-op on already-aligned audio. With both scripts sharing one
+  robust implementation, --align on top of postprocessed audio should
+  now be close to a no-op (small/zero residual shift), as expected.
 """
 
 import argparse
@@ -38,25 +54,10 @@ from pesq import pesq
 from pystoi import stoi
 from tqdm import tqdm
 
+from align_utils import estimate_delay, apply_delay, si_sdr
+
 EVAL_SR = 16000  # sample rate used for PESQ (wb) and STOI
-
-
-def align_signals(ref: np.ndarray, deg: np.ndarray, max_shift: int = 4000) -> np.ndarray:
-    """Optionally align deg to ref using cross-correlation, searching
-    +/- max_shift samples. Returns the shifted/truncated deg signal.
-    Not called by default; enable with --align if you see suspiciously
-    low PESQ/STOI scores that suggest misalignment."""
-    n = min(len(ref), len(deg))
-    ref_seg = ref[:n]
-    deg_seg = deg[:n]
-    corr = np.correlate(deg_seg - deg_seg.mean(), ref_seg - ref_seg.mean(), mode="full")
-    lag = np.argmax(corr) - (n - 1)
-    lag = int(np.clip(lag, -max_shift, max_shift))
-    if lag > 0:
-        deg = deg[lag:]
-    elif lag < 0:
-        deg = np.concatenate([np.zeros(-lag, dtype=deg.dtype), deg])
-    return deg
+MAX_SHIFT_SAMPLES = int(0.1 * EVAL_SR)  # 100 ms search window at 16kHz
 
 
 def compute_snr(clean: np.ndarray, est: np.ndarray) -> float:
@@ -79,16 +80,18 @@ def evaluate_pair(clean_path: Path, deg_path: Path, do_align: bool = False):
     deg = load_16k(deg_path)
 
     if do_align:
-        deg = align_signals(clean, deg)
+        lag = estimate_delay(clean, deg, MAX_SHIFT_SAMPLES)
+        deg = apply_delay(deg, lag)
 
     n = min(len(clean), len(deg))
     clean = clean[:n]
     deg = deg[:n]
 
     snr_val = compute_snr(clean, deg)
+    sisdr_val = si_sdr(clean, deg)
     pesq_val = pesq(EVAL_SR, clean, deg, "wb")
     stoi_val = stoi(clean, deg, EVAL_SR, extended=False)
-    return snr_val, pesq_val, stoi_val
+    return snr_val, sisdr_val, pesq_val, stoi_val
 
 
 def find_matching_file(folder: Path, stem: str):
@@ -100,12 +103,12 @@ def find_matching_file(folder: Path, stem: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compute SNR/PESQ/STOI for enhanced (and optionally noisy) audio")
+    parser = argparse.ArgumentParser(description="Compute SNR/SI-SDR/PESQ/STOI for enhanced (and optionally noisy) audio")
     parser.add_argument("--clean_dir", required=True)
     parser.add_argument("--enhanced_dir", required=True)
     parser.add_argument("--noisy_dir", default=None, help="Optional: also score noisy-vs-clean as a baseline")
     parser.add_argument("--output_csv", default="results.csv")
-    parser.add_argument("--align", action="store_true", help="Cross-correlate to fix small time misalignment")
+    parser.add_argument("--align", action="store_true", help="Cross-correlate (GCC-PHAT) to fix small time misalignment")
     args = parser.parse_args()
 
     clean_dir = Path(args.clean_dir)
@@ -126,8 +129,8 @@ def main():
 
         row = {"file": stem}
         try:
-            snr_e, pesq_e, stoi_e = evaluate_pair(cf, enh_path, do_align=args.align)
-            row.update(snr_enhanced=snr_e, pesq_enhanced=pesq_e, stoi_enhanced=stoi_e)
+            snr_e, sisdr_e, pesq_e, stoi_e = evaluate_pair(cf, enh_path, do_align=args.align)
+            row.update(snr_enhanced=snr_e, si_sdr_enhanced=sisdr_e, pesq_enhanced=pesq_e, stoi_enhanced=stoi_e)
         except Exception as e:
             print(f"[ERROR] enhanced eval failed for '{stem}': {e}")
             continue
@@ -136,8 +139,8 @@ def main():
             noisy_path = find_matching_file(noisy_dir, stem)
             if noisy_path is not None:
                 try:
-                    snr_n, pesq_n, stoi_n = evaluate_pair(cf, noisy_path, do_align=args.align)
-                    row.update(snr_noisy=snr_n, pesq_noisy=pesq_n, stoi_noisy=stoi_n)
+                    snr_n, sisdr_n, pesq_n, stoi_n = evaluate_pair(cf, noisy_path, do_align=args.align)
+                    row.update(snr_noisy=snr_n, si_sdr_noisy=sisdr_n, pesq_noisy=pesq_n, stoi_noisy=stoi_n)
                 except Exception as e:
                     print(f"[ERROR] noisy baseline eval failed for '{stem}': {e}")
             else:
@@ -156,6 +159,7 @@ def main():
         print("\n=== Mean improvement (enhanced - noisy) ===")
         improvement = pd.DataFrame({
             "snr_improvement": df["snr_enhanced"] - df["snr_noisy"],
+            "si_sdr_improvement": df["si_sdr_enhanced"] - df["si_sdr_noisy"],
             "pesq_improvement": df["pesq_enhanced"] - df["pesq_noisy"],
             "stoi_improvement": df["stoi_enhanced"] - df["stoi_noisy"],
         })
