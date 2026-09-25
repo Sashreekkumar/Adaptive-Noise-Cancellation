@@ -80,7 +80,24 @@ def bandlimit(audio: np.ndarray, sr: int, low_hz: float = 80, high_hz: float = 8
     return sosfiltfilt(sos, audio).astype(np.float32)
 
 
-def process_pair(clean_path: Path, enh_path: Path, noisy_path, blend_wet: float):
+def rms_normalize(audio: np.ndarray, target_dbfs: float) -> np.ndarray:
+    """Loudness (RMS) normalization to a fixed target level, applied as
+    the last step, independent of the clean-gain-match step above. This
+    is a separate, toggleable layer -- --normalize_volume turns it on;
+    without the flag, only the clean-referenced optimal_gain correction
+    is applied (as before)."""
+    rms = np.sqrt(np.mean(audio.astype(np.float64) ** 2)) + 1e-12
+    target_rms = 10 ** (target_dbfs / 20)
+    gain = target_rms / rms
+    out = audio * gain
+    peak = np.max(np.abs(out)) + 1e-12
+    if peak > 0.99:
+        out = out * (0.99 / peak)
+    return out.astype(np.float32)
+
+
+def process_pair(clean_path: Path, enh_path: Path, noisy_path, blend_wet: float,
+                  normalize_volume: bool = False, target_dbfs: float = -26.0):
     clean, _ = librosa.load(str(clean_path), sr=SR, mono=True)
     enh, _ = librosa.load(str(enh_path), sr=SR, mono=True)
 
@@ -106,6 +123,12 @@ def process_pair(clean_path: Path, enh_path: Path, noisy_path, blend_wet: float)
     # 4. Band-limit to speech range
     enh = bandlimit(enh, SR)
 
+    # 5. Optional volume normalization layer -- OFF by default, toggle
+    # with --normalize_volume to A/B test whether it helps your metrics
+    # on top of the clean-referenced gain match already applied in step 2.
+    if normalize_volume:
+        enh = rms_normalize(enh, target_dbfs)
+
     # avoid clipping
     peak = np.max(np.abs(enh)) + 1e-12
     if peak > 0.99:
@@ -119,9 +142,10 @@ def _worker(args_tuple):
     Does the file loading, processing, and writing for a single file,
     so worker processes don't have to ship large arrays back to the
     main process."""
-    stem, clean_path, enh_path, noisy_path, blend_wet, output_dir = args_tuple
+    stem, clean_path, enh_path, noisy_path, blend_wet, output_dir, normalize_volume, target_dbfs = args_tuple
     try:
-        out_audio = process_pair(Path(clean_path), Path(enh_path), noisy_path, blend_wet)
+        out_audio = process_pair(Path(clean_path), Path(enh_path), noisy_path, blend_wet,
+                                  normalize_volume=normalize_volume, target_dbfs=target_dbfs)
         out_path = Path(output_dir) / (stem + ".wav")
         sf.write(str(out_path), out_audio, SR)
         return (stem, True, None)
@@ -137,6 +161,8 @@ def main():
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--blend_wet", type=float, default=1.0, help="1.0 = pure enhanced, e.g. 0.9 = 90% enhanced + 10% noisy")
     parser.add_argument("--workers", type=int, default=None, help="Number of worker processes (default: os.cpu_count())")
+    parser.add_argument("--normalize_volume", action="store_true", help="Toggle: apply RMS loudness normalization as a final layer (OFF by default)")
+    parser.add_argument("--target_dbfs", type=float, default=-26.0, help="Target level for --normalize_volume (default: -26.0 dBFS)")
     args = parser.parse_args()
 
     clean_dir = Path(args.clean_dir)
@@ -158,7 +184,7 @@ def main():
             print(f"[SKIP] no enhanced file for '{stem}'")
             continue
         noisy_path = find_matching_file(noisy_dir, stem) if noisy_dir else None
-        tasks.append((stem, str(cf), str(enh_path), str(noisy_path) if noisy_path else None, args.blend_wet, str(output_dir)))
+        tasks.append((stem, str(cf), str(enh_path), str(noisy_path) if noisy_path else None, args.blend_wet, str(output_dir), args.normalize_volume, args.target_dbfs))
 
     if not tasks:
         raise SystemExit("No matching clean/enhanced pairs found.")

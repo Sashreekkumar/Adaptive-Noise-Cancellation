@@ -89,6 +89,8 @@ log/
 # Ignore datasets by default
 data/raw/
 data/processed/
+**/data/
+data/
 
 # Audio / video generated during development
 *.wav
