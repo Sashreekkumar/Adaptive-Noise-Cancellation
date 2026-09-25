@@ -11,10 +11,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import librosa
-
 from . import config
 from .model import get_model
+from .loader import load_audio
 from .preprocessing import preprocess
 from .enhancement import enhance_audio
 from .postprocessing import postprocess
@@ -46,7 +45,7 @@ def clean_audio_file(input_path, output_path, *, device=None, pad: bool = True,
     start = time.perf_counter()
 
     t0 = time.perf_counter()
-    audio, _ = librosa.load(str(input_path), sr=config.MODEL_SR, mono=True)
+    audio = load_audio(input_path, sr=config.MODEL_SR)
     stage_seconds["load"] = time.perf_counter() - t0
     audio_duration = len(audio) / config.MODEL_SR
 
