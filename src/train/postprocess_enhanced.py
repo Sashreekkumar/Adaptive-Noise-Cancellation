@@ -4,9 +4,17 @@ postprocess_enhanced.py (parallelized)
 Run this AFTER enhance_with_deepfilternet.py, before scoring.
 
 For each enhanced file, matched against its clean reference:
-  1. Delay-aligns the enhanced signal to the reference (cross-correlation).
+  1. Delay-aligns the enhanced signal to the reference (GCC-PHAT
+     cross-correlation, shared with evaluate_metrics.py via
+     align_utils.py -- see that module's docstring for why).
   2. Gain-matches the enhanced signal to the reference (least-squares
      optimal scalar) -- removes level-mismatch penalty from raw SNR.
+     NOTE: this step, combined with delay alignment, is what makes the
+     "SNR" you compute downstream closer in spirit to SI-SDR (a
+     standard scale-invariant speech-enhancement metric) than to a
+     deployment-realistic raw SNR. That's a legitimate, standard
+     technique -- just be aware of what it represents. evaluate_metrics.py
+     now also reports si_sdr explicitly alongside snr for this reason.
   3. Band-limits to the speech range (default 80 Hz - 8000 Hz) to strip
      residual broadband noise/artifacts outside the band that matters.
   4. Optionally blends a fraction of the original noisy signal back in
@@ -33,8 +41,10 @@ from pathlib import Path
 import librosa
 import numpy as np
 import soundfile as sf
-from scipy.signal import butter, sosfiltfilt, correlate
+from scipy.signal import butter, sosfiltfilt
 from tqdm import tqdm
+
+from align_utils import estimate_delay, apply_delay
 
 SR = 48000
 MAX_SHIFT_SAMPLES = 4000  # ~83 ms at 48kHz, generous for DF's algorithmic delay
@@ -46,26 +56,6 @@ def find_matching_file(folder: Path, stem: str):
         if p.exists():
             return p
     return None
-
-
-def estimate_delay(ref: np.ndarray, deg: np.ndarray, max_shift: int = MAX_SHIFT_SAMPLES) -> int:
-    n = min(len(ref), len(deg))
-    ref_seg = ref[:n] - ref[:n].mean()
-    deg_seg = deg[:n] - deg[:n].mean()
-    # FFT-based correlation (O(n log n)) instead of np.correlate's direct
-    # O(n^2) computation -- direct correlation on full-length audio at
-    # 48kHz is what was causing ~20s/file.
-    corr = correlate(deg_seg, ref_seg, mode="full", method="fft")
-    lag = np.argmax(corr) - (n - 1)
-    return int(np.clip(lag, -max_shift, max_shift))
-
-
-def apply_delay(deg: np.ndarray, lag: int) -> np.ndarray:
-    if lag > 0:
-        return deg[lag:]
-    elif lag < 0:
-        return np.concatenate([np.zeros(-lag, dtype=deg.dtype), deg])
-    return deg
 
 
 def optimal_gain(ref: np.ndarray, deg: np.ndarray) -> float:
@@ -101,8 +91,8 @@ def process_pair(clean_path: Path, enh_path: Path, noisy_path, blend_wet: float,
     clean, _ = librosa.load(str(clean_path), sr=SR, mono=True)
     enh, _ = librosa.load(str(enh_path), sr=SR, mono=True)
 
-    # 1. Delay alignment
-    lag = estimate_delay(clean, enh)
+    # 1. Delay alignment (GCC-PHAT, robust to periodic voiced speech)
+    lag = estimate_delay(clean, enh, MAX_SHIFT_SAMPLES)
     enh = apply_delay(enh, lag)
 
     n = min(len(clean), len(enh))
@@ -115,7 +105,8 @@ def process_pair(clean_path: Path, enh_path: Path, noisy_path, blend_wet: float,
     # 3. Optional dry/wet blend with original noisy (softens artifacts)
     if blend_wet < 1.0 and noisy_path is not None:
         noisy, _ = librosa.load(str(noisy_path), sr=SR, mono=True)
-        noisy = apply_delay(noisy, estimate_delay(clean, noisy))
+        noisy_lag = estimate_delay(clean, noisy, MAX_SHIFT_SAMPLES)
+        noisy = apply_delay(noisy, noisy_lag)
         m = min(len(enh), len(noisy))
         enh, noisy = enh[:m], noisy[:m]
         enh = blend_wet * enh + (1 - blend_wet) * noisy
