@@ -1,0 +1,207 @@
+# ============================================================
+# Python
+# ============================================================
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env*/
+.venv*/
+venv*/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+
+# Compiled Python
+*.py[cod]
+*$py.class
+
+# Python build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.ruff_cache/
+
+# ============================================================
+# Cache directories
+# ============================================================
+
+# Any .cache directory anywhere in the project
+.cache/
+**/.cache/
+
+# Common application caches
+.cache/
+node_modules/.cache/
+.parcel-cache/
+.vite/
+.next/
+.nuxt/
+
+# ============================================================
+# Environment / Secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Credentials / secrets
+credentials.json
+secrets.json
+service-account.json
+
+# ============================================================
+# Logs
+# ============================================================
+
+*.log
+logs/
+log/
+
+# ============================================================
+# Data
+# ============================================================
+
+# Ignore datasets by default
+data/raw/
+data/processed/
+
+# Audio / video generated during development
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# ============================================================
+# ML / AI artifacts
+# ============================================================
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+
+# Model exports
+*.onnx
+*.engine
+*.trt
+
+# TensorBoard
+runs/
+tensorboard/
+wandb/
+
+# Experiment outputs
+experiments/
+outputs/
+results/
+
+# ============================================================
+# Temporary files
+# ============================================================
+
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.orig
+*~
+
+# Temporary directories
+tmp/
+temp/
+.tmp/
+
+# ============================================================
+# IDEs / Editors
+# ============================================================
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+*.iml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ============================================================
+# OS files
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# ============================================================
+# Project-specific generated files
+# ============================================================
+
+# Generated metadata
+*.generated.json
+
+# Generated reports
+reports/
+
+# Temporary processing files
+processing_tmp/
+processing_temp/
+
+# ============================================================
+# Infrastructure / deployment secrets
+# ============================================================
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# AWS local files
+.aws/
