@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>noisygen Documentation — Reproducible Synthetic Noisy Speech Generator</title>
+  <meta name="description" content="Technical documentation and API reference for noisygen: reproducible, provenance-preserving synthetic noisy-speech dataset generator." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header class="official-header">
+    <div class="reading-progress-bar" id="reading-progress-bar"></div>
+
+    <div class="header-left-col">
+      <button class="mobile-toggle-btn" id="mobile-menu-btn" aria-label="Toggle navigation">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+
+      <a href="#overview" class="official-brand">
+        <span class="brand-text">noisygen</span>
+        <span class="brand-sub">docs</span>
+        <span class="brand-version">v1.2.0</span>
+      </a>
+    </div>
+
+    <!-- Center Search Bar -->
+    <div class="header-center-col">
+      <button class="search-trigger-box" id="global-search-trigger">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <span class="search-placeholder">Search documentation, flags, options...</span>
+        <kbd class="search-kbd">Ctrl K</kbd>
+      </button>
+    </div>
+
+    <!-- Right Header Actions -->
+    <div class="header-right-col">
+      <button class="action-btn" onclick="openCliBuilder()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+        <span>CLI Builder</span>
+      </button>
+
+      <button class="theme-btn" id="theme-toggle-btn" aria-label="Toggle color mode" title="Switch theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <div class="doc-layout">
+
+    <!-- Left Navigation Sidebar -->
+    <aside class="doc-sidebar" id="app-sidebar">
+      <div class="sidebar-search-container">
+        <input type="text" id="sidebar-filter-input" class="sidebar-search-field" placeholder="Filter sections..." />
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Injected dynamically by app.js -->
+      </nav>
+    </aside>
+
+    <!-- Center Content Column -->
+    <main class="doc-main">
+      <div class="main-inner">
+        <nav class="breadcrumbs" id="breadcrumbs-container">
+          <!-- Injected dynamically by app.js -->
+        </nav>
+
+        <article class="doc-article" id="doc-content-container">
+          <!-- Active documentation section injected dynamically by app.js -->
+        </article>
+      </div>
+    </main>
+
+    <!-- Right Table of Contents -->
+    <aside class="doc-toc" id="toc-container">
+      <!-- Injected dynamically by app.js -->
+    </aside>
+
+  </div>
+
+  <!-- Search Modal (Ctrl+K) -->
+  <div class="modal-backdrop" id="search-modal">
+    <div class="modal-window search-window">
+      <div class="search-input-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="search-input" class="search-text-field" placeholder="Search documentation..." autocomplete="off" />
+        <button class="modal-close" onclick="closeSearchModal()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="search-results-box" id="search-results-list">
+        <!-- Results injected dynamically by app.js -->
+      </div>
+      <div class="search-footer-info">
+        <span><kbd>Esc</kbd> to close</span>
+        <span><kbd>Enter</kbd> to open</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLI Command & Config Builder Modal -->
+  <div class="modal-backdrop" id="cli-builder-modal">
+    <div class="modal-window builder-window">
+      <div class="modal-top">
+        <div class="modal-heading">
+          <h2 class="modal-title">CLI Command &amp; Config Builder</h2>
+          <span class="modal-desc">Generate production command strings and configuration YAML</span>
+        </div>
+        <button class="modal-close" onclick="closeCliBuilder()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modal-content">
+        <div class="preset-row">
+          <span class="preset-label">Templates:</span>
+          <button class="preset-button" onclick="applyPreset('smoke')">Smoke Test (100 samples)</button>
+          <button class="preset-button" onclick="applyPreset('prod')">Production (10,000 samples)</button>
+          <button class="preset-button" onclick="applyPreset('clean-probe')">Probe Summary Only</button>
+          <button class="preset-button" onclick="applyPreset('reconstruct')">Reconstruct Dataset</button>
+        </div>
+
+        <div class="builder-columns">
+          <div class="builder-inputs">
+            <div class="input-grid">
+              <div class="field-item">
+                <label class="field-label" for="bld-root">Root Path (--root)</label>
+                <input type="text" id="bld-root" class="field-input" value="/data/noisygen" oninput="onBuilderInputChange()" />
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="bld-output">Output Path (--output)</label>
+                <input type="text" id="bld-output" class="field-input" value="/data/noisygen/output" oninput="onBuilderInputChange()" />
+              </div>
+            </div>
+
+            <div class="input-grid">
+              <div class="field-item">
+                <label class="field-label" for="bld-config">Config File (--config)</label>
+                <input type="text" id="bld-config" class="field-input" value="config.json" oninput="onBuilderInputChange()" />
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="bld-samples">Samples (--num-samples)</label>
+                <input type="number" id="bld-samples" class="field-input" value="10000" min="1" oninput="onBuilderInputChange()" />
+              </div>
+            </div>
+
+            <div class="input-grid">
+              <div class="field-item">
+                <label class="field-label" for="bld-seed">Master Seed (--seed)</label>
+                <input type="number" id="bld-seed" class="field-input" value="42" oninput="onBuilderInputChange()" />
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="bld-workers">Workers (--workers)</label>
+                <input type="number" id="bld-workers" class="field-input" value="8" min="1" max="64" oninput="onBuilderInputChange()" />
+              </div>
+            </div>
+
+            <div class="checkbox-list">
+              <label class="checkbox-label">
+                <input type="checkbox" id="bld-probe-all" checked onchange="onBuilderInputChange()" />
+                <span>Pre-probe all audio files (--probe-all)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="bld-resume" onchange="onBuilderInputChange()" />
+                <span>Resume interrupted run (--resume)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="bld-overwrite" onchange="onBuilderInputChange()" />
+                <span>Overwrite non-empty output directory (--overwrite)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="bld-summary-only" onchange="onBuilderInputChange()" />
+                <span>Summary only, no audio output (--summary-only)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="builder-outputs">
+            <div class="tab-header">
+              <button class="builder-tab active" onclick="switchBuilderTab('cmd')">Bash Command</button>
+              <button class="builder-tab" onclick="switchBuilderTab('yaml')">config.yaml</button>
+            </div>
+
+            <div id="builder-cmd-panel">
+              <div class="builder-code-wrap">
+                <div class="builder-code-top">
+                  <span class="code-label">CLI</span>
+                  <button class="code-copy-btn" onclick="copySnippet('builder-cmd-code')">Copy</button>
+                </div>
+                <pre><code id="builder-cmd-code" class="language-bash"></code></pre>
+              </div>
+            </div>
+
+            <div id="builder-yaml-panel" style="display: none;">
+              <div class="builder-code-wrap">
+                <div class="builder-code-top">
+                  <span class="code-label">YAML</span>
+                  <button class="code-copy-btn" onclick="copySnippet('builder-yaml-code')">Copy</button>
+                </div>
+                <pre><code id="builder-yaml-code" class="language-yaml"></code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-area" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="docs-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
