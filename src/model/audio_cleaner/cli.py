@@ -38,7 +38,9 @@ def _build_arg_parser():
     parser.add_argument("--hpf_cutoff", type=float, default=config.HPF_CUTOFF_HZ)
     parser.add_argument("--band_low", type=float, default=config.BAND_LOW_HZ)
     parser.add_argument("--band_high", type=float, default=config.BAND_HIGH_HZ)
-    parser.add_argument("--device", default=None, help="cpu or cuda (default: auto-detect)")
+    parser.add_argument("--device", default=None,
+                         help="Currently advisory only -- DeepFilterNet controls its own "
+                              "device placement (see model.get_model)")
     parser.add_argument("--serve", action="store_true", help="Launch a drag-and-drop web UI instead of CLI mode")
     parser.add_argument("--port", type=int, default=7860)
     return parser
@@ -78,18 +80,29 @@ def main():
         get_model(args.device)  # warm up once, reused for every file below
 
         failures = []
+        latencies = []
+        rtfs = []
         for f in tqdm(files, desc="Cleaning"):
             out_path = out_dir / (f.stem + ".mp3")
             try:
-                clean_audio_file(f, out_path, **kwargs)
+                result = clean_audio_file(f, out_path, **kwargs)
+                latencies.append(result.latency_seconds)
+                rtfs.append(result.rtf)
             except Exception as e:
                 failures.append((f.name, str(e)))
                 print(f"[FAILED] {f.name}: {e}")
         print(f"\nDone. {len(files) - len(failures)}/{len(files)} files written to {out_dir}")
+        if latencies:
+            print(f"Latency: avg {sum(latencies) / len(latencies):.2f}s, "
+                  f"min {min(latencies):.2f}s, max {max(latencies):.2f}s")
+            print(f"RTF: avg {sum(rtfs) / len(rtfs):.2f} (below 1.0 = faster than real time)")
     else:
         out_path = Path(args.output) if args.output else in_path.with_name(in_path.stem + "_clean.mp3")
-        clean_audio_file(in_path, out_path, **kwargs)
-        print(f"Wrote {out_path}")
+        result = clean_audio_file(in_path, out_path, **kwargs)
+        breakdown = ", ".join(f"{k}={v:.2f}s" for k, v in result.stage_seconds.items())
+        print(f"Wrote {result.output_path}")
+        print(f"Latency: {result.latency_seconds:.2f}s for {result.audio_duration_seconds:.2f}s of audio "
+              f"(RTF={result.rtf:.2f}, {breakdown})")
 
 
 if __name__ == "__main__":

@@ -23,15 +23,22 @@ def serve(args):
 
     def _run(file_path):
         if file_path is None:
-            return None
+            return None, ""
         out_path = Path(tempfile.mkdtemp()) / (Path(file_path).stem + "_clean.mp3")
-        clean_audio_file(file_path, out_path, **kwargs)
-        return str(out_path)
+        result = clean_audio_file(file_path, out_path, **kwargs)
+        breakdown = ", ".join(f"{k}={v:.2f}s" for k, v in result.stage_seconds.items())
+        print(f"[audio_cleaner] {result.audio_duration_seconds:.2f}s audio -> "
+              f"{result.latency_seconds:.2f}s latency (RTF={result.rtf:.2f}) | {breakdown}")
+        status = (f"{result.latency_seconds:.2f} s total (RTF={result.rtf:.2f}) — {breakdown}")
+        return str(result.output_path), status
 
     demo = gr.Interface(
         fn=_run,
         inputs=gr.Audio(sources=["upload"], type="filepath", label="Drop a noisy mp3/wav here"),
-        outputs=gr.Audio(type="filepath", label="Cleaned mp3"),
+        outputs=[
+            gr.Audio(type="filepath", label="Cleaned mp3"),
+            gr.Textbox(label="Latency (input to output)"),
+        ],
         title="Audio Denoiser (DeepFilterNet3)",
         description="Drag and drop a noisy recording to get a cleaned mp3 back.",
     )
