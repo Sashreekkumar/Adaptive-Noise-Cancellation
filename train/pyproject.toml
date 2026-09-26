@@ -1,0 +1,42 @@
+[project]
+name = "speech-enhancement-pipeline"
+version = "0.1.0"
+description = "DeepFilterNet3-based speech enhancement pipeline: preprocess, enhance, postprocess, and evaluate (SNR/SI-SDR/PESQ/STOI)."
+readme = "train.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "audioread>=3.0",
+    "torch>=2.0",
+    "tqdm>=4.65",
+    "deepfilternet>=0.5.6",
+    "pesq>=0.0.4",
+    "pystoi>=0.4.1",
+]
+
+[project.scripts]
+preprocess-noisy = "preprocess_noisy:main"
+enhance-deepfilternet = "enhance_with_deepfilternet:main"
+postprocess-enhanced = "postprocess_enhanced:main"
+evaluate-metrics = "evaluate_metrics:main"
+evaluate-pipeline-stages = "evaluate_pipeline_stages:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = [
+    "align_utils",
+    "preprocess_noisy",
+    "enhance_with_deepfilternet",
+    "postprocess_enhanced",
+    "evaluate_metrics",
+    "evaluate_pipeline_stages",
+]

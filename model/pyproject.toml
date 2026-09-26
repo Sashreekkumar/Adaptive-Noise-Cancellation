@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audio-cleaner"
+version = "0.1.0"
+description = "Clean noisy speech recordings using DeepFilterNet3, as a CLI, library, or drag-and-drop web UI."
+readme = "model.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Your Name" }
+]
+dependencies = [
+    "numpy>=1.24",
+    "torch>=2.0",
+    "deepfilternet>=0.5.6",
+    "scipy>=1.10",
+    "tqdm>=4.65",
+    "gradio>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+audio-cleaner = "audio_cleaner.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["audio_cleaner*"]
