@@ -1,18 +1,16 @@
 """
 exporter.py
 
-Writes the final float32 waveform out as an mp3. Goes via a temp wav
-+ ffmpeg (libmp3lame) rather than adding a new Python mp3-encoding
-dependency, since ffmpeg is already required for mp3 decoding
-upstream (librosa/audioread).
+Writes the final float32 waveform out as an mp3. Pipes raw PCM
+directly into ffmpeg's stdin and lets it write the mp3 straight to
+disk -- no intermediate temp .wav file, so there's no extra disk
+write+read round trip between the model output and the final mp3.
 """
 
 import subprocess
-import tempfile
-from pathlib import Path
 
 import numpy as np
-import soundfile as sf
+from pathlib import Path
 
 from . import config
 
@@ -21,17 +19,12 @@ def export_mp3(audio: np.ndarray, sr: int, out_path, bitrate: str = config.MP3_B
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        tmp_wav = tmp.name
-
-    try:
-        sf.write(tmp_wav, audio, sr)
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-i", tmp_wav,
-             "-codec:a", "libmp3lame", "-b:a", bitrate, str(out_path)],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"ffmpeg mp3 export failed: {result.stderr}")
-    finally:
-        Path(tmp_wav).unlink(missing_ok=True)
+    raw_pcm = np.ascontiguousarray(audio, dtype=np.float32).tobytes()
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "pipe:0",
+        "-codec:a", "libmp3lame", "-b:a", bitrate, str(out_path),
+    ]
+    result = subprocess.run(cmd, input=raw_pcm, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg mp3 export failed: {result.stderr.decode(errors='replace')}")

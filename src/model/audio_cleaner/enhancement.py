@@ -17,6 +17,6 @@ def enhance_audio(audio: np.ndarray, model, df_state, device=None,
     used to move tensors -- see model.get_model for why."""
     from df.enhance import enhance
     audio_t = torch.from_numpy(audio).unsqueeze(0).float()
-    with torch.no_grad():
+    with torch.inference_mode():
         enhanced_t = enhance(model, df_state, audio_t, pad=pad, atten_lim_db=atten_lim_db)
     return enhanced_t.squeeze(0).cpu().numpy()
