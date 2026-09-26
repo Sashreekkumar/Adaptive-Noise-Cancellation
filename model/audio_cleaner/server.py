@@ -39,6 +39,7 @@ def serve(args):
             gr.Audio(type="filepath", label="Cleaned mp3"),
             gr.Textbox(label="Latency (input to output)"),
         ],
+        
         title="Audio Denoiser (DeepFilterNet3)",
         description="Drag and drop a noisy recording to get a cleaned mp3 back.",
     )
