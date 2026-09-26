@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "onnx-audio-cleaner"
+version = "0.1.0"
+description = "Standalone ONNX Runtime pipeline for cleaning noisy speech with DeepFilterNet3"
+readme = "model.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "onnxruntime>=1.16",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+# Only needed to (re-)export the .onnx graph via `onnx/export_to_onnx.py`.
+export = [
+    "torch>=2.0",
+    "torchaudio>=2.0",
+    "onnx>=1.14",
+    "deepfilternet",
+]
+
+[project.scripts]
+onnx-clean = "onnx.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["onnx*"]

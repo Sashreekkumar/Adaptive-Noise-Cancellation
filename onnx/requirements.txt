@@ -1,0 +1,14 @@
+# --- Runtime (needed to actually clean audio via run_onnx.py) ---
+numpy>=1.24
+scipy>=1.10
+onnxruntime>=1.16
+tqdm>=4.65
+# Note: ffmpeg must also be installed and on PATH (used via subprocess,
+# not a Python package) for onnx/loader.py and onnx/exporter.py.
+
+# --- Export-only (needed once, for `python -m onnx.export_to_onnx`) ---
+# Uncomment these if you need to (re-)export the .onnx graph yourself.
+# torch>=2.0
+# torchaudio>=2.0
+# onnx>=1.14
+# deepfilternet
