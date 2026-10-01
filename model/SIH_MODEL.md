@@ -52,7 +52,9 @@ gate disabled with several experts → uniform weights; no reference → cancell
 - Three experts = 3× DFN3 compute (2.14 M parameters each) + gate (≈63 k for 2 experts).
 
 ## Tests
-`python tests/test_pipeline.py`, `python tests/test_residual_canceller.py`, `python tests/test_canceller_interface.py`
+Run from `model/`: `python tests/test_pipeline.py`, `python tests/test_audio_cleaner_integration.py`,
+`python tests/test_cli_ffmpeg.py` (needs ffmpeg on PATH and `tqdm`), `python tests/test_residual_canceller.py`,
+`python tests/test_canceller_interface.py`
 Environment: Python 3.11, see `requirements.txt` (verified with torch 2.0.1, deepfilternet 0.5.6).
 
 ## Using it through the existing `audio_cleaner` pipeline
@@ -71,5 +73,6 @@ print(r.model_telemetry)   # experts, gate status/weights, canceller guard count
 - The reference must be sample-synchronous with the input and decode to the same number of samples (otherwise an
   error is raised; nothing is cropped or aligned).
 - Without `--reference` the canceller is bypassed. `--atten_lim_db` / `--no_pad` apply only to single-model mode.
-- Not verified here: the ffmpeg decode/encode path with this mode (ffmpeg was not available on the development
-  machine; the integration test stubs decode/encode).
+- End-to-end with real ffmpeg decode / mp3 encode is covered by `tests/test_cli_ffmpeg.py` (default mode, expert
+  mode with and without a reference, mismatched reference, batch folder with a reference folder).
+  Not exercised: the Gradio web UI (`--serve`) with `--model_config`.
