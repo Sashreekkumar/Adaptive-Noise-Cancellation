@@ -1,0 +1,4 @@
+# extra dependencies for model/sih_train and model/scripts (training / evaluation)
+soundfile>=0.12
+pesq==0.0.4
+pystoi==0.4.1

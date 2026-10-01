@@ -1,0 +1,38 @@
+{
+  "provenance": {
+    "e1_ft_v1": "FT-v1: DeepFilterNet3 fine-tuned from pretrained on train_fast (17,303 rows, clipped rows excluded), 2000 steps, batch 16, 3 s, lr 5e-5, frozen BatchNorm, seed 26052; best validation loss at step 2000.",
+    "e2_impulse_e2a": "E2-a impulse specialist: fine-tuned from FT-v1 on tier-C rows only (gunfire/explosion/artillery, 2,983 rows), 1000 steps, same settings; step-1000 model (no validation improvement over FT-v1).",
+    "gate_v1_e0_e1.pt": "FusionGate for 2 experts (E0 pretrained + E1 FT-v1), 2000 steps on 1,127 val_pool pairs; best validation loss at step 2000. Not loadable for 3 experts.",
+    "E0": "pretrained DeepFilterNet3 (deepfilternet 0.5.6 model cache; not part of this folder)."
+  },
+  "files": {
+    "e1_ft_v1/checkpoints/model_2000.ckpt.best": {
+      "bytes": 8715465,
+      "sha256": "48ac727300f84c0ee179949f26f5078e7cfb6c80a7e690df98db1e9f8d77f68e"
+    },
+    "e1_ft_v1/config.ini": {
+      "bytes": 2067,
+      "sha256": "415eb925d44990d938fb739f514aa3662c1ec0ea836cff044fa1291b82cb4290"
+    },
+    "e1_ft_v1/export_info.json": {
+      "bytes": 129,
+      "sha256": "02e24f1d8f0cf7350ee707bbe29c6ce75679525dfaca629770ecf23300e04169"
+    },
+    "e2_impulse_e2a/checkpoints/model_1000.ckpt.best": {
+      "bytes": 8715465,
+      "sha256": "53d3b7a56a8d6494a949a0ddf051ebfbc583b1671d5790e34a2844ef378c84ed"
+    },
+    "e2_impulse_e2a/config.ini": {
+      "bytes": 2067,
+      "sha256": "415eb925d44990d938fb739f514aa3662c1ec0ea836cff044fa1291b82cb4290"
+    },
+    "e2_impulse_e2a/export_info.json": {
+      "bytes": 133,
+      "sha256": "934f8ed9213658872ab932e8b70b11dc2f6a91b04f6e31cffad55d51d97c5b66"
+    },
+    "gate_v1_e0_e1.pt": {
+      "bytes": 315623,
+      "sha256": "422f76972382c96accfe801379f0d70a3e27470d64e7fde5a47a9a777ddb76d9"
+    }
+  }
+}
