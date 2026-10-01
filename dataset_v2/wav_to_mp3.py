@@ -46,7 +46,7 @@ INPUT_DIR = Path(r"C:\Users\sashr\Documents\Automatic-Noise-Cancellation\data\ou
 
 OUTPUT_DIR = (
     PROJECT_ROOT
-    / "cleanmp3"
+    / "cleanymp3"
 )
 
 
