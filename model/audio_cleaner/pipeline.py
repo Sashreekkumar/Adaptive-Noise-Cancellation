@@ -16,6 +16,7 @@ from .model import get_model
 from .loader import load_audio
 from .preprocessing import preprocess
 from .enhancement import enhance_audio
+from .expert_enhancement import enhance_audio_experts
 from .postprocessing import postprocess
 from .exporter import export_mp3
 
@@ -27,36 +28,60 @@ class CleanResult:
     audio_duration_seconds: float   # length of the input audio
     rtf: float                      # real-time factor = latency / audio_duration; <1 is faster than real time
     stage_seconds: dict              # per-stage breakdown: load, preprocess, enhance, postprocess, export
+    model_telemetry: dict = None     # expert-pipeline telemetry (gate weights, canceller guards); None in single-model mode
 
 
 def clean_audio_file(input_path, output_path, *, device=None, pad: bool = True,
                       atten_lim_db=None, blend_wet: float = 1.0, normalize_volume: bool = False,
                       target_dbfs: float = config.TARGET_DBFS, hpf_cutoff: float = config.HPF_CUTOFF_HZ,
                       band_low: float = config.BAND_LOW_HZ, band_high: float = config.BAND_HIGH_HZ,
-                      skip_dc: bool = False, skip_hpf: bool = False, skip_pre_norm: bool = False) -> CleanResult:
+                      skip_dc: bool = False, skip_hpf: bool = False, skip_pre_norm: bool = False,
+                      model_config=None, reference_path=None) -> CleanResult:
     """Run the full pipeline on a single file. Reuses the cached
     model (see model.get_model), so only the first call in a process
     pays model-load cost. Returns a CleanResult with the output path,
     latency, real-time factor, and a per-stage timing breakdown so you
-    can see exactly where time is going."""
-    model, df_state, resolved_device = get_model(device)
+    can see exactly where time is going.
+
+    `model_config` (path to a sih_model JSON config) switches stage 2 to the
+    multi-expert pipeline (experts -> fusion gate -> residual canceller); see
+    expert_enhancement.py. `reference_path` is the reference-microphone
+    recording for the canceller: it must be sample-synchronous with the input
+    and have the same length. It gets the same DC/high-pass filtering as the
+    primary but no loudness normalization. `pad` and `atten_lim_db` only apply
+    to the single-model mode."""
+    if model_config is None:
+        if reference_path is not None:
+            raise ValueError("reference_path requires model_config (the reference is only used by the expert pipeline)")
+        model, df_state, resolved_device = get_model(device)
 
     stage_seconds = {}
     start = time.perf_counter()
 
     t0 = time.perf_counter()
     audio = load_audio(input_path, sr=config.MODEL_SR)
+    reference = load_audio(reference_path, sr=config.MODEL_SR) if reference_path is not None else None
+    if reference is not None and len(reference) != len(audio):
+        raise ValueError(f"reference length {len(reference)} != input length {len(audio)} samples; "
+                         "the reference must be sample-synchronous with the input")
     stage_seconds["load"] = time.perf_counter() - t0
     audio_duration = len(audio) / config.MODEL_SR
 
     t0 = time.perf_counter()
     pre = preprocess(audio, config.MODEL_SR, skip_dc, skip_hpf, skip_pre_norm,
                       hpf_cutoff, target_dbfs)
+    pre_reference = None
+    if reference is not None:  # same linear filtering as the primary; no RMS normalization (keeps a dead reference dead)
+        pre_reference = preprocess(reference, config.MODEL_SR, skip_dc, skip_hpf, True, hpf_cutoff, target_dbfs)
     stage_seconds["preprocess"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    enhanced = enhance_audio(pre, model, df_state, resolved_device,
-                              pad=pad, atten_lim_db=atten_lim_db)
+    model_telemetry = None
+    if model_config is not None:
+        enhanced, model_telemetry = enhance_audio_experts(pre, model_config, pre_reference)
+    else:
+        enhanced = enhance_audio(pre, model, df_state, resolved_device,
+                                  pad=pad, atten_lim_db=atten_lim_db)
     stage_seconds["enhance"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
@@ -72,4 +97,4 @@ def clean_audio_file(input_path, output_path, *, device=None, pad: bool = True,
     rtf = latency / audio_duration if audio_duration > 0 else float("nan")
     return CleanResult(output_path=Path(output_path), latency_seconds=latency,
                         audio_duration_seconds=audio_duration, rtf=rtf,
-                        stage_seconds=stage_seconds)
+                        stage_seconds=stage_seconds, model_telemetry=model_telemetry)

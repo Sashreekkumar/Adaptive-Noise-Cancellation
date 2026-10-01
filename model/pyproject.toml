@@ -30,4 +30,4 @@ dev = [
 audio-cleaner = "audio_cleaner.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["audio_cleaner*"]
+include = ["audio_cleaner*", "sih_model*"]

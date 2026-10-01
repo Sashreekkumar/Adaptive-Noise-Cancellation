@@ -41,6 +41,12 @@ def _build_arg_parser():
     parser.add_argument("--device", default=None,
                          help="Currently advisory only -- DeepFilterNet controls its own "
                               "device placement (see model.get_model)")
+    parser.add_argument("--model_config", default=None,
+                         help="sih_model JSON config: use the multi-expert pipeline (experts -> fusion gate -> "
+                              "residual canceller) instead of single-model DeepFilterNet3")
+    parser.add_argument("--reference", default=None,
+                         help="Reference-microphone file (single-file mode) or folder with the same file names "
+                              "(batch mode); requires --model_config")
     parser.add_argument("--serve", action="store_true", help="Launch a drag-and-drop web UI instead of CLI mode")
     parser.add_argument("--port", type=int, default=7860)
     return parser
@@ -52,6 +58,7 @@ def _kwargs_from_args(args):
         blend_wet=args.blend_wet, normalize_volume=args.normalize_volume,
         target_dbfs=args.target_dbfs, hpf_cutoff=args.hpf_cutoff,
         band_low=args.band_low, band_high=args.band_high,
+        model_config=args.model_config,
     )
 
 
@@ -76,8 +83,9 @@ def main():
         if not files:
             raise SystemExit(f"No audio files found in {in_path}")
 
-        print("Loading DeepFilterNet3 model...")
-        get_model(args.device)  # warm up once, reused for every file below
+        if args.model_config is None:
+            print("Loading DeepFilterNet3 model...")
+            get_model(args.device)  # warm up once, reused for every file below
 
         failures = []
         latencies = []
@@ -85,7 +93,8 @@ def main():
         for f in tqdm(files, desc="Cleaning"):
             out_path = out_dir / (f.stem + ".mp3")
             try:
-                result = clean_audio_file(f, out_path, **kwargs)
+                ref = Path(args.reference) / f.name if args.reference else None
+                result = clean_audio_file(f, out_path, reference_path=ref, **kwargs)
                 latencies.append(result.latency_seconds)
                 rtfs.append(result.rtf)
             except Exception as e:
@@ -98,7 +107,7 @@ def main():
             print(f"RTF: avg {sum(rtfs) / len(rtfs):.2f} (below 1.0 = faster than real time)")
     else:
         out_path = Path(args.output) if args.output else in_path.with_name(in_path.stem + "_clean.mp3")
-        result = clean_audio_file(in_path, out_path, **kwargs)
+        result = clean_audio_file(in_path, out_path, reference_path=args.reference, **kwargs)
         breakdown = ", ".join(f"{k}={v:.2f}s" for k, v in result.stage_seconds.items())
         print(f"Wrote {result.output_path}")
         print(f"Latency: {result.latency_seconds:.2f}s for {result.audio_duration_seconds:.2f}s of audio "

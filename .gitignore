@@ -207,3 +207,8 @@ processing_temp/
 
 # AWS local files
 .aws/
+# ============================================================
+# SIH model-side checkpoints (kept outside git; see model/SIH_MODEL.md)
+# ============================================================
+model/checkpoints/
+*.ckpt.best

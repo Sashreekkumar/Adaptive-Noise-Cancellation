@@ -1,0 +1,9 @@
+{
+  "experts": [
+    {"name": "E0", "source": "pretrained", "enabled": true},
+    {"name": "E1", "source": "../checkpoints/e1_ft_v1", "enabled": true},
+    {"name": "E2", "source": "../checkpoints/e2_impulse_e2a", "enabled": false}
+  ],
+  "gate": {"enabled": true, "checkpoint": "../checkpoints/gate_v1_e0_e1.pt"},
+  "canceller": {"enabled": true}
+}
