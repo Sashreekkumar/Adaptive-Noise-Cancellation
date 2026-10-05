@@ -1,0 +1,20 @@
+# Monorepo-wide requirements (union of sih_model + dataset_v2)
+
+# Shared
+numpy>=1.24
+scipy>=1.10
+
+# sih_model (audio_cleaner)
+torch>=2.0
+deepfilternet>=0.5.6
+tqdm>=4.65
+gradio>=4.0
+
+# dataset_v2 (noisygen)
+soundfile>=0.12  # libsndfile >= 1.1 needed for mp3 output
+
+# Note: ffmpeg is an external system binary, not a pip package.
+# Install it separately, e.g.:
+#   Ubuntu/Debian: sudo apt install ffmpeg
+#   macOS:         brew install ffmpeg
+#   Windows:       https://ffmpeg.org/download.html

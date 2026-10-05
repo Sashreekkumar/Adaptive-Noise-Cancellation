@@ -1,55 +1,92 @@
-# Adaptive-Noise-Cancellation
+# Speech Denoising Monorepo
 
-Modular pipeline: one noisy audio file in -> one clean mp3 out.
+Two related projects in one repo:
 
-## Layout
+| Folder | Package | Purpose |
+|---|---|---|
+| `sih_model/` | `audio_cleaner` | Denoising pipeline around DeepFilterNet3 (library, CLI, Gradio web UI) |
+| `dataset_v2/` | `noisygen` | Modular generator for paired clean/noisy speech datasets with full metadata |
 
 ```
-run.py                       # entry point
-audio_cleaner/
-    config.py                 # shared constants (sample rate, cutoffs, dBFS target...)
-    model.py                  # loads & caches DeepFilterNet3 once per process
-    preprocessing.py          # DC offset removal, high-pass, RMS normalize
-    enhancement.py             # DeepFilterNet3 inference
-    postprocessing.py         # dry/wet blend, band-limit, final normalize
-    exporter.py                # writes final audio out as mp3 (via ffmpeg)
-    pipeline.py                # clean_audio_file() -- wires the stages together
-    cli.py                      # argparse CLI (single file / folder / --serve)
-    server.py                  # Gradio drag-and-drop web UI
+.
+├── pyproject.toml        # installs both packages
+├── requirements.txt      # union of both projects' dependencies
+├── README.md
+├── model_v2_nlms/        # audio_cleaner (see its own README for details)
+└── dataset_v2/           # noisygen (see its own README for details)
 ```
 
 ## Install
 
-```
-pip install deepfilternet librosa soundfile torch tqdm gradio
-```
-ffmpeg must be installed and on PATH.
-
-## Usage
-
-```
-python run.py input.mp3 -o clean.mp3        # single file
-python run.py ./noisy_dir -o ./clean_dir    # batch folder
-python run.py --serve                       # drag-and-drop UI at localhost:7860
+```bash
+pip install -r requirements.txt     # or: pip install -e .
 ```
 
-Or from Python:
+`ffmpeg` is required (system binary): `sudo apt install ffmpeg` / `brew install ffmpeg`.
+Python >= 3.9.
+
+Each subproject can also be installed on its own from its folder (`pip install -e sih_model`, `pip install -e dataset_v2`).
+
+---
+
+## 1. audio_cleaner 
+
+Takes a noisy recording (mp3/wav/m4a/flac/ogg) and writes a cleaned mp3.
+
+```
+load (ffmpeg, 48 kHz mono) → preprocess (DC removal, HPF, RMS norm)
+  → DeepFilterNet3 → postprocess (optional dry/wet blend, band-pass, norm, clip)
+  → export (ffmpeg → mp3)
+```
+
+Library:
+
 ```python
 from audio_cleaner import clean_audio_file
-clean_audio_file("input.mp3", "clean.mp3")
+
+result = clean_audio_file("noisy.mp3", "clean.mp3", normalize_volume=True)
+print(result.latency_seconds, result.rtf, result.stage_seconds)
 ```
 
-## What changed from the R&D scripts
+CLI:
 
-- `align_utils.py`'s GCC-PHAT delay estimation and gain-matching are gone.
-  Both required a clean reference file, which doesn't exist in production --
-  there's just one noisy file. DeepFilterNet3's `pad=True` already keeps its
-  output sample-aligned with its input, so no external alignment step is
-  needed.
-- `evaluate_metrics.py` (SNR/SI-SDR/PESQ/STOI) is dropped -- pipeline design
-  is finalized, nothing to score against in production anyway.
-- `postprocessing.py`'s dry/wet blend now mixes in the pre-enhancement
-  (preprocessed) audio instead of a separate raw noisy file, since that's
-  the only "noisy" version available in a single-file run.
-- The model loads once per process and is cached (`model.get_model`), reused
-  across every file in a batch run and every upload to the server.
+```bash
+python run.py noisy.mp3                          # -> noisy_clean.mp3
+python run.py noisy.wav -o cleaned/output.mp3
+python run.py ./noisy_recordings -o ./cleaned    # batch
+python run.py --serve --port 8000                # web UI
+```
+
+Key flags: `--atten_lim_db`, `--blend_wet`, `--normalize_volume`, `--target_dbfs`,
+`--hpf_cutoff`, `--band_low`, `--band_high`, `--no_pad`.
+
+Defaults live in `config.py` (48 kHz, 70 Hz HPF, -26 dBFS, 80–8000 Hz band, 192k mp3).
+
+## 2. noisygen (`dataset_v2/`)
+
+Generates reproducible noisy-speech datasets from a folder of clean speech and a folder of noise.
+
+```bash
+python generate_dataset.py --root /path/with/wav_and_noise --num-samples 1000 --workers 4
+python -m noisygen --root ... --resume | --summary-only | --reconstruct 000001 | --print-default-config
+```
+
+Features:
+- Config-driven SNR / noise selection with a config hash and per-sample metadata (JSONL, crash recovery, `--resume`)
+- `output_format: "mp3"` with `mp3_compression_level` (needs libsndfile >= 1.1 with mp3 support)
+- `delete_clean_source_after_use` to save disk space (disables `--reconstruct` for deleted sources)
+- `impulsive_noise_categories` (gunfire, artillery, explosion, ...) scattered as short events with fades
+- `--reconstruct` verifies a sample can be rebuilt byte-for-byte
+
+Modules: `constants`, `errors`, `util`, `config`, `sources`, `audio`, `selection`, `sample`,
+`worker`, `storage`, `runner`, `summary`, `reconstruct`, `cli`.
+
+## Typical workflow
+
+1. Build a dataset with `noisygen` (clean / noise / noisy + metadata).
+2. Run `audio_cleaner` on the noisy files.
+3. Compare against the clean references (e.g. PESQ) to tune preprocessing/postprocessing.
+
+## License
+
+MIT

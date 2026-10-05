@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "speech-denoising-monorepo"
-version = "0.1.0"
-description = "Speech denoising toolkit: DeepFilterNet3 cleaning pipeline (audio_cleaner) and a noisy-speech dataset generator (noisygen)."
+name = "noisygen"
+version = "1.2.0"
+description = "Modular noisy-speech dataset generator with provenance metadata, mp3 output, and impulsive noise events."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -15,10 +15,6 @@ authors = [
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
-    "torch>=2.0",
-    "deepfilternet>=0.5.6",
-    "tqdm>=4.65",
-    "gradio>=4.0",
     "soundfile>=0.12",
 ]
 
@@ -28,9 +24,7 @@ dev = [
 ]
 
 [project.scripts]
-audio-cleaner = "audio_cleaner.cli:main"
 noisygen = "noisygen.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["sih_model", "dataset_v2"]
-include = ["audio_cleaner*", "noisygen*"]
+include = ["noisygen*"]x
