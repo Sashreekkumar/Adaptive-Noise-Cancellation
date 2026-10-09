@@ -8,7 +8,11 @@ launch the drag-and-drop web UI (see server.py).
 import argparse
 from pathlib import Path
 
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ImportError:  # progress bar is optional; batch mode works without it
+    def tqdm(iterable, **_):
+        return iterable
 
 from . import config
 from .model import get_model
