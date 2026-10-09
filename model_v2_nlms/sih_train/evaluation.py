@@ -33,12 +33,22 @@ def pesq_wb_16k(clean: np.ndarray, estimate: np.ndarray, sample_rate: int) -> tu
         return None, f"not computed: {error}"
 
 
+def pesq_nb_8k(clean: np.ndarray, estimate: np.ndarray, sample_rate: int) -> tuple[float | None, str]:
+    """PESQ narrow-band ('nb' mode) on a metric-only 8 kHz resample; WAVs remain untouched."""
+    try:
+        clean_8k = resample_poly(clean, 8000, sample_rate)
+        estimate_8k = resample_poly(estimate, 8000, sample_rate)
+        return float(pesq(8000, clean_8k, estimate_8k, "nb")), "8 kHz metric-only resample"
+    except Exception as error:  # PESQ rejects some short/problematic signals.
+        return None, f"not computed: {error}"
+
+
 PROJECT_SAMPLE_RATE = 48000
 
 # Common result schema shared by every experiment (DFN3, NLMS, ERASE, hybrids).
 RESULT_FIELDS = (
     "experiment", "mixture_id", "category", "tier", "target_snr_db", "input_snr_db", "output_snr_db",
-    "snr_improvement_db", "stoi", "pesq", "pesq_note", "sample_rate", "duration_sec", "processing_time_sec",
+    "snr_improvement_db", "stoi", "pesq", "pesq_note", "pesq_nb", "pesq_nb_note", "sample_rate", "duration_sec", "processing_time_sec",
     "rtf", "output_peak", "output_clipping_samples", "clean_path", "noisy_path", "output_path",
 )
 
@@ -63,7 +73,8 @@ def evaluate_triplet(experiment: str, pair: dict[str, str], output_path: str,
         "tier": pair.get("tier", ""), "target_snr_db": float(pair["snr_db"]),
         "input_snr_db": metrics["input_snr_db"], "output_snr_db": output_snr,
         "snr_improvement_db": output_snr - metrics["input_snr_db"], "stoi": metrics["stoi"],
-        "pesq": metrics["pesq"], "pesq_note": metrics["pesq_note"], "sample_rate": metrics["input_sample_rate"],
+        "pesq": metrics["pesq"], "pesq_note": metrics["pesq_note"], "pesq_nb": metrics["pesq_nb"],
+        "pesq_nb_note": metrics["pesq_nb_note"], "sample_rate": metrics["input_sample_rate"],
         "duration_sec": duration, "processing_time_sec": processing_time_sec,
         "rtf": None if processing_time_sec is None else processing_time_sec / duration,
         "output_peak": metrics["output_peak"], "output_clipping_samples": metrics["output_clipping_samples"],
@@ -88,6 +99,7 @@ def metrics_from_arrays(clean: np.ndarray, noisy: np.ndarray, output: np.ndarray
     input_snr = snr_db(clean, noisy)
     output_snr = snr_db(clean, output)
     pesq_score, pesq_note = pesq_wb_16k(clean, output, sample_rate)
+    pesq_nb_score, pesq_nb_note = pesq_nb_8k(clean, output, sample_rate)
     clean_sr = sample_rate
     return {
         "input_duration_sec": len(noisy) / sample_rate,
@@ -98,6 +110,8 @@ def metrics_from_arrays(clean: np.ndarray, noisy: np.ndarray, output: np.ndarray
         "stoi": float(stoi(clean, output, clean_sr, extended=False)),
         "pesq": pesq_score,
         "pesq_note": pesq_note,
+        "pesq_nb": pesq_nb_score,
+        "pesq_nb_note": pesq_nb_note,
         "output_peak": float(np.max(np.abs(output))),
         "output_clipping_samples": int(np.count_nonzero(np.abs(output) >= 0.999)),
     }

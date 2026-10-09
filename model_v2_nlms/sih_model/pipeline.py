@@ -21,6 +21,7 @@ from sih_model.canceller_interface import frame_reference_clipped, gate_mask_bin
 from sih_model.config import ModelConfig
 from sih_model.experts import ExpertBank, load_expert
 from sih_model.fusion_gate import FusionGate
+from sih_model.impulse import impulse_features
 from sih_model.interfaces import ModelInput, ModelOutput
 from sih_model.residual_canceller import ResidualCanceller
 
@@ -62,7 +63,7 @@ class ModelPipeline:
         outs = self.bank(inp.primary)                                    # shared STFT + all experts
         b, k, t, f = outs.spec.shape
         if self.gate is not None:
-            fused, band_w, _ = self.gate(outs)
+            fused, band_w, _ = self.gate(outs, impulse=impulse_features(outs.noisy_spec))
         else:
             band_w = torch.full((b, t, 32, k), 1.0 / k, device=outs.spec.device)
             fused = outs.spec[:, 0] if k == 1 else outs.spec.mean(dim=1)

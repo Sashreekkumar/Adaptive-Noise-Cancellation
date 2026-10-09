@@ -1,4 +1,7 @@
-"""Train the per-ERB-band expert FusionGate (E0 = pretrained DFN3, E1 = fine-tuned DFN3; both frozen).
+"""Train the per-ERB-band expert FusionGate over two frozen DFN3 experts (default E0 pretrained + E1; v2: --e0 E1 --e1 E2).
+
+v2 changes: --e0 picks the first expert; the gate receives the causal impulse features (sih_model/impulse.py);
+--tier-c-weight N repeats tier-C (impulsive) gate-train rows N times so the impulse expert is seen often enough.
 
 Data   gate-train rows = val manifest role `val_pool` (verified, not clipped): disjoint from E1's training data
        (train_fast), from the 42 `val_select` selection files, the frozen evaluation files, calibration and test.
@@ -38,6 +41,7 @@ from sih_train.dfn_finetune import PairBatcher
 from sih_train.evaluation import metrics_from_arrays
 from sih_model.experts import ExpertBank, load_expert
 from sih_model.fusion_gate import FusionGate
+from sih_model.impulse import impulse_features
 
 SR = 48000
 
@@ -45,7 +49,9 @@ SR = 48000
 @dataclass
 class GateConfig:
     run_dir: str
-    e1: str                                  # FT-v1 export_best dir or .pt; "pretrained" = E0 copy (smoke only)
+    e0: str = "pretrained"                 # first expert: "pretrained" or an export dir / .pt (v2: E1)
+    tier_c_weight: int = 1                  # repeat tier-C gate-train rows this many times
+    e1: str = ""                                 # FT-v1 export_best dir or .pt; "pretrained" = E0 copy (smoke only)
     manifest: str = r"D:\SIH26052\manifests\val_manifest.csv"
     roots: list[str] = field(default_factory=list)
     zips: list[str] = field(default_factory=list)
@@ -98,7 +104,7 @@ class GateTrainer:
         self.run_dir = Path(cfg.run_dir)
         (self.run_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
         torch.manual_seed(cfg.seed)
-        e0 = load_expert(None)
+        e0 = load_expert(None) if cfg.e0 == "pretrained" else load_expert(cfg.e0)
         e1 = load_expert(None) if cfg.e1 == "pretrained" else load_expert(cfg.e1)
         self.bank = ExpertBank([e0, e1])
         self.device = self.bank.device
@@ -111,7 +117,9 @@ class GateTrainer:
             raise RuntimeError("checkpoint config has no MultiResSpecLoss")
         source = AudioSource([Path(r) for r in cfg.roots], [Path(z) for z in cfg.zips])
         self.source = source
-        self.train_rows = gate_rows(cfg.manifest, cfg.train_role)
+        rows = gate_rows(cfg.manifest, cfg.train_role)
+        self.train_rows = rows + [r for r in rows if r.get("tier") == "C"] * (cfg.tier_c_weight - 1)
+        print(f"gate-train rows: {len(rows)} ({sum(r.get('tier') == 'C' for r in rows)} tier C) -> {len(self.train_rows)} after weighting", flush=True)
         with open(cfg.manifest, newline="", encoding="utf-8") as h:
             self.val_rows = sorted((r for r in csv.DictReader(h) if r["role"] == cfg.val_role and r["use_for_selection"] == "True"),
                                    key=lambda r: r["mixture_id"])
@@ -142,7 +150,7 @@ class GateTrainer:
         started = time.perf_counter()
         self.gate.train()
         outs = self.bank(noisy)                                   # frozen experts, no_grad, one STFT
-        fused, w, _ = self.gate(outs)
+        fused, w, _ = self.gate(outs, impulse=impulse_features(outs.noisy_spec))
         loss, spec_loss, smooth = self.loss(fused, self.clean_spec(clean), w)
         self.opt.zero_grad(set_to_none=True)
         loss.backward()
@@ -162,7 +170,7 @@ class GateTrainer:
             clean, _, _ = self.source.read(row["clean_relpath"])
             noisy, clean = noisy[:, 0], clean[:, 0]
             outs = self.bank(noisy)
-            fused, w, _ = self.gate(outs)
+            fused, w, _ = self.gate(outs, impulse=impulse_features(outs.noisy_spec))
             losses.append(self.loss(fused, self.clean_spec(clean), w)[1])
             y = self.bank.synthesize(fused, outs.orig_len)[0].astype(np.float64)
             if not np.isfinite(y).all():
@@ -193,7 +201,7 @@ class GateTrainer:
         if not path.exists():
             return False
         blob = torch.load(path, map_location="cpu")
-        ignore = {"roots", "zips", "manifest", "run_dir", "e1"}
+        ignore = {"roots", "zips", "manifest", "run_dir", "e0", "e1"}
         diff = {k: (blob["config"].get(k), v) for k, v in asdict(self.cfg).items() if k not in ignore and blob["config"].get(k) != v}
         if diff:
             raise RuntimeError(f"refusing to resume: configuration changed {diff}")
@@ -257,17 +265,18 @@ class GateTrainer:
 def main() -> None:
     d = GateConfig(run_dir="", e1="")
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--e1", required=True, help="FT-v1 export_best dir or .pt ('pretrained' = E0/E0 smoke)")
+    p.add_argument("--e0", default="pretrained", help="first expert: 'pretrained' or export dir / .pt (v2: E1)")
+    p.add_argument("--e1", required=True, help="second expert: export dir or .pt (v2: E2 impulse); 'pretrained' = smoke")
     p.add_argument("--run-dir", required=True)
     p.add_argument("--manifest", default=d.manifest)
     p.add_argument("--root", action="append", default=[])
     p.add_argument("--zip", action="append", default=[])
-    for name in ("steps", "batch_size", "val_every", "checkpoint_every", "seed", "val_max_files"):
+    for name in ("steps", "batch_size", "val_every", "checkpoint_every", "seed", "val_max_files", "tier_c_weight"):
         p.add_argument("--" + name.replace("_", "-"), type=int, default=getattr(d, name))
     for name in ("segment_sec", "lr", "lambda_smooth", "remix_prob"):
         p.add_argument("--" + name.replace("_", "-"), type=float, default=getattr(d, name))
     a = p.parse_args()
-    cfg = GateConfig(run_dir=a.run_dir, e1=a.e1, manifest=a.manifest, roots=a.root, zips=a.zip, steps=a.steps,
+    cfg = GateConfig(run_dir=a.run_dir, e0=a.e0, tier_c_weight=a.tier_c_weight, e1=a.e1, manifest=a.manifest, roots=a.root, zips=a.zip, steps=a.steps,
                      batch_size=a.batch_size, val_every=a.val_every, checkpoint_every=a.checkpoint_every, seed=a.seed,
                      val_max_files=a.val_max_files, segment_sec=a.segment_sec, lr=a.lr, lambda_smooth=a.lambda_smooth,
                      remix_prob=a.remix_prob)
