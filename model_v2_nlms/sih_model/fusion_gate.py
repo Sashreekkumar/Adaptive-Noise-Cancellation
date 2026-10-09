@@ -14,6 +14,13 @@ from torch import nn
 N_ERB = 32
 
 
+def impulse_rule_weights(impulse: torch.Tensor) -> torch.Tensor:
+    """Rule gate for two experts: impulse [B,T,2] (flag, severity) -> band weights [B,T,32,2] = [1 - flag, flag] in all
+    32 bands (second expert where the impulse flag is 1, first expert elsewhere). eval_gate.py B4 / gate mode "rule"."""
+    flag = impulse[..., 0][..., None].expand(-1, -1, N_ERB)                  # [B,T,32]
+    return torch.stack([1.0 - flag, flag], dim=-1)
+
+
 class FusionGate(nn.Module):
     def __init__(self, n_experts: int, erb_inv_fb: torch.Tensor, hidden: int = 64):
         super().__init__()

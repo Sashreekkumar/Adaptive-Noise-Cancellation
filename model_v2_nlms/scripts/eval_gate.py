@@ -24,7 +24,7 @@ from eval_b0_b1 import BINS, SUITES, si_sdr  # same pairs, bins and SI-SDR as B0
 from sih_model.dfn3 import enhance_waveform
 from sih_train.evaluation import metrics_from_arrays
 from sih_model.experts import ExpertBank, load_expert
-from sih_model.fusion_gate import FusionGate
+from sih_model.fusion_gate import FusionGate, impulse_rule_weights
 from sih_model.impulse import impulse_features
 
 
@@ -63,8 +63,7 @@ def main() -> None:
                         issues.append(f"{pair['mixture_id']} {name}: weights non-finite or not summing to 1")
                     ys[name] = (bank.synthesize(fused, outs.orig_len)[0].astype(np.float64), w[0].cpu().numpy())
                 # B4 rule: second expert (v2: E2 impulse) in all 32 bands where the impulse flag is 1, first expert elsewhere
-                flag = impulse[..., 0][..., None].expand(-1, -1, 32)                  # [B,T,32]
-                w = torch.stack([1.0 - flag, flag], dim=-1)                            # [B,T,32,2]
+                w = impulse_rule_weights(impulse)                                     # [B,T,32,2]; = gate mode "rule"
                 fused = uniform.fuse(outs.spec, w)
                 ys["B4_rule"] = (bank.synthesize(fused, outs.orig_len)[0].astype(np.float64), w[0].cpu().numpy())
                 # expert difference (E1 = --e0 = expert 0, E2 = --e1 = expert 1): mean |mask_E1 - mask_E2| over all

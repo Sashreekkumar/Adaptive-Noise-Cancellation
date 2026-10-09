@@ -87,6 +87,40 @@ def main() -> None:
             pass
     print("PASS input contract enforced (48 kHz only, reference shape == primary)")
 
+    # 7. gate mode "rule" == eval_gate.py B4_rule on one transient frozen pair (canceller bypassed: no reference)
+    rule_cfg = ModelConfig.load(ROOT / "configs" / "e1_e2_rule_v2.json")
+    bad = ModelConfig.load(ROOT / "configs" / "e1_e2_rule_v2.json")
+    bad.gate.checkpoint = str(ROOT / "checkpoints" / "gate_v1_e0_e1.pt")
+    try:
+        bad.validate()
+        raise AssertionError("rule mode accepted a checkpoint")
+    except ValueError:
+        pass
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import csv
+    import soundfile as sf
+    import torch
+    from eval_b0_b1 import SUITES
+    from sih_model.experts import ExpertBank, load_expert
+    from sih_model.fusion_gate import FusionGate, impulse_rule_weights
+    from sih_model.impulse import impulse_features
+    manifest = SUITES.get("transient")
+    if manifest is None or not manifest.exists():
+        print("SKIP rule-mode parity: frozen transient manifest not found")
+        return
+    pair = next(csv.DictReader(manifest.open(newline="", encoding="utf-8")))
+    noisy, _ = sf.read(pair["local_noisy_path"], dtype="float64")
+    bank = ExpertBank([load_expert(e.source) for e in rule_cfg.active_experts])      # as eval_gate.py: --e0 E1, --e1 E2
+    outs = bank(noisy)
+    with torch.no_grad():
+        w = impulse_rule_weights(impulse_features(outs.noisy_spec))
+        b4 = bank.synthesize(FusionGate(2, bank.erb_inv_fb).to(bank.device).eval().fuse(outs.spec, w), outs.orig_len)[0]
+    rule = ModelPipeline(rule_cfg).process(ModelInput(noisy))
+    diff = float(np.max(np.abs(rule.audio - b4.astype(np.float64))))
+    assert rule.telemetry["gate"].startswith("rule") and diff < 1e-6, (rule.telemetry["gate"], diff)
+    print(f"PASS gate mode rule == eval_gate B4_rule on {pair['mixture_id']}: max abs diff {diff:.2e}, "
+          f"weights {rule.telemetry['gate_mean_weights']}; rule + checkpoint rejected")
+
 
 if __name__ == "__main__":
     main()

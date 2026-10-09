@@ -7,7 +7,8 @@
     {"name": "E2", "source": "<export dir or .pt>", "enabled": true}
   ],
   "gate": {"enabled": true, "checkpoint": null,   # null -> untrained (zero-init = uniform weights)
-           "use_impulse": false},                 # true -> gate gets causal impulse features (gate_v2+); false -> zeros
+           "use_impulse": false,                  # true -> gate gets causal impulse features (gate_v2+); false -> zeros
+           "mode": "learned"},                    # "rule" -> [1 - flag, flag] over exactly 2 experts, no checkpoint
   "canceller": {"enabled": true, "mu": 0.5, ...}  # ResidualCanceller keyword arguments
 }
 Relative paths are resolved against the config file's directory.
@@ -33,6 +34,7 @@ class GateSpec:
     enabled: bool = True
     checkpoint: str | None = None    # FusionGate checkpoint ({"gate": state_dict}); must match the number of enabled experts
     use_impulse: bool = False        # feed sih_model/impulse.py features to the gate; must match how the gate was trained
+    mode: str = "learned"            # "learned" = FusionGate (checkpoint); "rule" = [1 - flag, flag] over 2 experts, no checkpoint
 
 
 @dataclass
@@ -57,6 +59,15 @@ class ModelConfig:
         names = [e.name for e in self.experts]
         if len(set(names)) != len(names):
             raise ValueError(f"duplicate expert names: {names}")
+        if self.gate.mode not in ("learned", "rule"):
+            raise ValueError(f"gate.mode must be 'learned' or 'rule', got {self.gate.mode!r}")
+        if self.gate.enabled and self.gate.mode == "rule":
+            if len(self.active_experts) != 2:
+                raise ValueError(f"gate mode 'rule' needs exactly 2 enabled experts, got {len(self.active_experts)}")
+            if self.gate.checkpoint:
+                raise ValueError("gate mode 'rule' takes no checkpoint")
+            if not self.gate.use_impulse:
+                raise ValueError("gate mode 'rule' needs use_impulse: true (the rule is driven by the impulse flag)")
 
     @staticmethod
     def load(path: str | Path) -> "ModelConfig":
@@ -73,7 +84,8 @@ class ModelConfig:
         gate = raw.get("gate", {})
         cfg = ModelConfig(
             experts=[ExpertSpec(e["name"], resolve(e["source"]), e.get("enabled", True)) for e in raw["experts"]],
-            gate=GateSpec(gate.get("enabled", True), resolve(gate.get("checkpoint")), bool(gate.get("use_impulse", False))),
+            gate=GateSpec(gate.get("enabled", True), resolve(gate.get("checkpoint")), bool(gate.get("use_impulse", False)),
+                          gate.get("mode", "learned")),
             canceller=CancellerSpec(canc.pop("enabled", True), canc),
         )
         cfg.validate()
