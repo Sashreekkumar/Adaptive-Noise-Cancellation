@@ -67,6 +67,13 @@ def main() -> None:
                 w = torch.stack([1.0 - flag, flag], dim=-1)                            # [B,T,32,2]
                 fused = uniform.fuse(outs.spec, w)
                 ys["B4_rule"] = (bank.synthesize(fused, outs.orig_len)[0].astype(np.float64), w[0].cpu().numpy())
+                # expert difference (E1 = --e0 = expert 0, E2 = --e1 = expert 1): mean |mask_E1 - mask_E2| over all
+                # frames x 32 bands, the same over impulse-flagged frames only (None if none flagged)
+                diff = (outs.mask[0, 0] - outs.mask[0, 1]).abs()                     # [T,32]
+                flagged = impulse[0, :, 0] > 0.5                                      # [T]
+                expert_diff = {"mask_absdiff_e1_e2": float(diff.mean()),
+                               "mask_absdiff_e1_e2_impulse": float(diff[flagged].mean()) if flagged.any() else None,
+                               "si_sdr_e2_vs_e1_db": si_sdr(ys["B0_pretrained"][0], ys["B1_ft_v1"][0])}
             for name, (y, w) in ys.items():
                 if not np.isfinite(y).all():
                     issues.append(f"{pair['mixture_id']} {name}: non-finite output")
@@ -75,7 +82,8 @@ def main() -> None:
                      "input_snr_db": m["input_snr_db"], "output_snr_db": m["output_snr_db"], "dsnr_db": m["snr_improvement_db"],
                      "stoi": m["stoi"], "pesq_wb": m["pesq"], "pesq_nb": m["pesq_nb"], "si_sdr_db": si_sdr(clean, y),
                      "si_sdr_improvement_db": si_sdr(clean, y) - si_sdr(clean, noisy), "output_peak": m["output_peak"],
-                     "w_e0": float(w[..., 0].mean()) if w is not None else None, "w_e1": float(w[..., 1].mean()) if w is not None else None}
+                     "w_e0": float(w[..., 0].mean()) if w is not None else None, "w_e1": float(w[..., 1].mean()) if w is not None else None,
+                     **expert_diff}
                 r["snr_bin"] = next(label for lo, hi, label in BINS if lo <= r["input_snr_db"] < hi)
                 if r["output_peak"] >= 0.999:
                     issues.append(f"{pair['mixture_id']} {name}: output peak {r['output_peak']:.3f}")
@@ -110,13 +118,22 @@ def main() -> None:
         per_file.append(f"| {mid} | {sel['B0_pretrained']['input_snr_db']:.2f} | " +
                         " | ".join(f"{sel[s]['dsnr_db']:+.2f} / {fmt(sel[s]['pesq_wb'])} / {fmt(sel[s]['pesq_nb'])} / {sel[s]['stoi']:.3f}"
                                    for s in systems) + " |")
+    files = [r for r in rows if r["system"] == "B0_pretrained"]                  # expert difference is per file
+    expert_diff_table = ["## Expert difference by suite (per-file means; E1 = --e0, E2 = --e1)", "",
+                         "| suite | n files | mean abs(mask_E1 - mask_E2) | same, impulse frames (n files) | SI-SDR E2 vs E1 (dB) |",
+                         "|---|---|---|---|---|"]
+    for suite in dict.fromkeys(r["suite"] for r in files):
+        sel = [r for r in files if r["suite"] == suite]
+        n_imp = sum(r["mask_absdiff_e1_e2_impulse"] is not None for r in sel)
+        expert_diff_table.append(f"| {suite} | {len(sel)} | {mean(sel, 'mask_absdiff_e1_e2'):.4f} | "
+                                 f"{mean(sel, 'mask_absdiff_e1_e2_impulse'):.4f} ({n_imp}) | {mean(sel, 'si_sdr_e2_vs_e1_db'):.2f} |")
     gate_file = hashlib.sha256(a.gate.read_bytes()).hexdigest()[:16]
     text = [f"# {a.tag}: B0 / B1 / B2 uniform / B3 trained gate / B4 impulse rule (frozen evaluation pairs)", "",
             f"E0 = {a.e0}; E1 = {a.e1}; gate = {a.gate} (sha256 {gate_file}, trained step {blob.get('step')})", "",
             "B0 = first expert (--e0) alone, B1 = second expert (--e1) alone; B4_rule = second expert in all 32 bands where "
             "the causal impulse flag (sih_model/impulse.py) is 1, first expert elsewhere.", "",
             *table("Overall", lambda r: "ALL"), *table("By suite", lambda r: r["suite"]),
-            *table("By measured input SNR (dB)", lambda r: r["snr_bin"]), *per_file, "",
+            *table("By measured input SNR (dB)", lambda r: r["snr_bin"]), *expert_diff_table, "", *per_file, "",
             "## Numerical issues", "", *(issues or ["none (weights finite and summing to 1, outputs finite, peaks < 0.999)"]),
             "", "FusionGate has no guards; the residual-canceller guards are not in this path."]
     (out / "summary.md").write_text("\n".join(text), encoding="utf-8")
