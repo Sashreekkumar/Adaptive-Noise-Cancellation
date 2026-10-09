@@ -207,3 +207,10 @@ processing_temp/
 
 # AWS local files
 .aws/
+
+# Detached model checkpoints (shared separately; see model_v2_nlms/checkpoints_manifest.json)
+model/checkpoints/
+model_v2_nlms/checkpoints
+
+# Written-up results (docs), not experiment output
+!docs/results/

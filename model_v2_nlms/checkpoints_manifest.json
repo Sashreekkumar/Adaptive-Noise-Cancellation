@@ -3,7 +3,8 @@
     "e1_ft_v1": "FT-v1: DeepFilterNet3 fine-tuned from pretrained on train_fast (17,303 rows, clipped rows excluded), 2000 steps, batch 16, 3 s, lr 5e-5, frozen BatchNorm, seed 26052; best validation loss at step 2000.",
     "e2_impulse_e2a": "E2-a impulse specialist: fine-tuned from FT-v1 on tier-C rows only (gunfire/explosion/artillery, 2,983 rows), 1000 steps, same settings; step-1000 model (no validation improvement over FT-v1).",
     "gate_v1_e0_e1.pt": "FusionGate for 2 experts (E0 pretrained + E1 FT-v1), 2000 steps on 1,127 val_pool pairs; best validation loss at step 2000. Not loadable for 3 experts.",
-    "E0": "pretrained DeepFilterNet3 (deepfilternet 0.5.6 model cache; not part of this folder)."
+    "E0": "pretrained DeepFilterNet3 (deepfilternet 0.5.6 model cache; not part of this folder).",
+    "gate_v2_e1_e2.pt": "FusionGate for 2 experts (E1 FT-v1 + E2 impulse) with causal impulse features (gate.use_impulse), 500 steps on CPU on 1,127 val_pool pairs (tier-C rows weighted x2); best validation loss at step 500. Only needed for gate mode 'learned' (configs/e1_e2_gate_v2.json); did not beat the impulse rule on the frozen pairs."
   },
   "files": {
     "e1_ft_v1/checkpoints/model_2000.ckpt.best": {
@@ -33,6 +34,10 @@
     "gate_v1_e0_e1.pt": {
       "bytes": 315623,
       "sha256": "422f76972382c96accfe801379f0d70a3e27470d64e7fde5a47a9a777ddb76d9"
+    },
+    "gate_v2_e1_e2.pt": {
+      "bytes": 316956,
+      "sha256": "c178d56580a0c5378d1f5a1544c641d03d71741cf97c7e28eb1a85eabd0beeb2"
     }
   }
 }
