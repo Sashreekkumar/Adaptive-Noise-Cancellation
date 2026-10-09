@@ -4,6 +4,6 @@
     {"name": "E1", "source": "../checkpoints/e1_ft_v1", "enabled": true},
     {"name": "E2", "source": "../checkpoints/e2_impulse_e2a", "enabled": true}
   ],
-  "gate": {"enabled": true, "checkpoint": "../checkpoints/gate_v2_e1_e2.pt"},
+  "gate": {"enabled": true, "checkpoint": "../checkpoints/gate_v2_e1_e2.pt", "use_impulse": true},
   "canceller": {"enabled": true}
 }

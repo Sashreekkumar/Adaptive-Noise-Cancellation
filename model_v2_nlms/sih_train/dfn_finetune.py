@@ -265,7 +265,7 @@ class Trainer:
             output = enhance_waveform(self.model, self.state, noisy)
             if not np.isfinite(output).all():
                 raise RuntimeError(f"Non-finite validation output for {row['mixture_id']}")
-            metrics.append(metrics_from_arrays(clean, noisy, output, SAMPLE_RATE))
+            metrics.append(metrics_from_arrays(clean, noisy, output, SAMPLE_RATE, pesq_nb=False))
             peaks.append(float(np.max(np.abs(output))))
             audio_sec += len(noisy) / SAMPLE_RATE
         pesq_values = [m["pesq"] for m in metrics if m["pesq"] is not None]

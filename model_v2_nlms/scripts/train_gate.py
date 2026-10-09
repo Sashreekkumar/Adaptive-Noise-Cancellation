@@ -175,7 +175,7 @@ class GateTrainer:
             y = self.bank.synthesize(fused, outs.orig_len)[0].astype(np.float64)
             if not np.isfinite(y).all():
                 raise RuntimeError(f"non-finite validation output {row['mixture_id']}")
-            mets.append(metrics_from_arrays(clean.astype(np.float64), noisy.astype(np.float64), y, SR))
+            mets.append(metrics_from_arrays(clean.astype(np.float64), noisy.astype(np.float64), y, SR, pesq_nb=False))
             w_sum += w.mean(dim=(0, 1, 2)).cpu().numpy()
         pesq = [m["pesq"] for m in mets if m["pesq"] is not None]
         return {"step": self.step, "val_loss": float(np.mean(losses)), "val_files": len(self.val_rows),

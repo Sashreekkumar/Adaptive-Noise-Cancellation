@@ -6,7 +6,8 @@
     {"name": "E1", "source": "<export dir or .pt>", "enabled": true},
     {"name": "E2", "source": "<export dir or .pt>", "enabled": true}
   ],
-  "gate": {"enabled": true, "checkpoint": null},  # null -> untrained (zero-init = uniform weights)
+  "gate": {"enabled": true, "checkpoint": null,   # null -> untrained (zero-init = uniform weights)
+           "use_impulse": false},                 # true -> gate gets causal impulse features (gate_v2+); false -> zeros
   "canceller": {"enabled": true, "mu": 0.5, ...}  # ResidualCanceller keyword arguments
 }
 Relative paths are resolved against the config file's directory.
@@ -31,6 +32,7 @@ class ExpertSpec:
 class GateSpec:
     enabled: bool = True
     checkpoint: str | None = None    # FusionGate checkpoint ({"gate": state_dict}); must match the number of enabled experts
+    use_impulse: bool = False        # feed sih_model/impulse.py features to the gate; must match how the gate was trained
 
 
 @dataclass
@@ -68,9 +70,10 @@ class ModelConfig:
             return str(q if q.is_absolute() else (path.parent / q).resolve())
 
         canc = dict(raw.get("canceller", {}))
+        gate = raw.get("gate", {})
         cfg = ModelConfig(
             experts=[ExpertSpec(e["name"], resolve(e["source"]), e.get("enabled", True)) for e in raw["experts"]],
-            gate=GateSpec(raw.get("gate", {}).get("enabled", True), resolve(raw.get("gate", {}).get("checkpoint"))),
+            gate=GateSpec(gate.get("enabled", True), resolve(gate.get("checkpoint")), bool(gate.get("use_impulse", False))),
             canceller=CancellerSpec(canc.pop("enabled", True), canc),
         )
         cfg.validate()

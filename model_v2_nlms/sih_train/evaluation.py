@@ -92,14 +92,16 @@ def evaluate_aligned(clean_path: str, noisy_path: str, output_path: str) -> dict
             **metrics_from_arrays(clean, noisy, output, clean_sr)}
 
 
-def metrics_from_arrays(clean: np.ndarray, noisy: np.ndarray, output: np.ndarray, sample_rate: int) -> dict[str, Any]:
-    """Same metrics as `evaluate_aligned`, for in-memory mono float64 arrays (e.g. training validation)."""
+def metrics_from_arrays(clean: np.ndarray, noisy: np.ndarray, output: np.ndarray, sample_rate: int,
+                        pesq_nb: bool = True) -> dict[str, Any]:
+    """Same metrics as `evaluate_aligned`, for in-memory mono float64 arrays (e.g. training validation).
+    pesq_nb=False skips PESQ-NB (pesq_nb = None) to keep training validation fast."""
     if len(clean) != len(noisy) or len(clean) != len(output):
         raise ValueError(f"Frame mismatch: clean={len(clean)}, noisy={len(noisy)}, output={len(output)}")
     input_snr = snr_db(clean, noisy)
     output_snr = snr_db(clean, output)
     pesq_score, pesq_note = pesq_wb_16k(clean, output, sample_rate)
-    pesq_nb_score, pesq_nb_note = pesq_nb_8k(clean, output, sample_rate)
+    pesq_nb_score, pesq_nb_note = pesq_nb_8k(clean, output, sample_rate) if pesq_nb else (None, "not requested")
     clean_sr = sample_rate
     return {
         "input_duration_sec": len(noisy) / sample_rate,

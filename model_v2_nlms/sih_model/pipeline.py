@@ -63,7 +63,8 @@ class ModelPipeline:
         outs = self.bank(inp.primary)                                    # shared STFT + all experts
         b, k, t, f = outs.spec.shape
         if self.gate is not None:
-            fused, band_w, _ = self.gate(outs, impulse=impulse_features(outs.noisy_spec))
+            impulse = impulse_features(outs.noisy_spec) if self.cfg.gate.use_impulse else None   # None -> zeros (gate_v1)
+            fused, band_w, _ = self.gate(outs, impulse=impulse)
         else:
             band_w = torch.full((b, t, 32, k), 1.0 / k, device=outs.spec.device)
             fused = outs.spec[:, 0] if k == 1 else outs.spec.mean(dim=1)
